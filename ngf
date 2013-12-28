@@ -1,0 +1,106 @@
+package com.xebia;
+
+import com.gargoylesoftware.htmlunit.WebClient;
+import com.gargoylesoftware.htmlunit.html.HtmlDivision;
+import com.gargoylesoftware.htmlunit.html.HtmlFieldSet;
+import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import com.gargoylesoftware.htmlunit.html.HtmlTableDataCell;
+import org.joda.time.DateMidnight;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
+public class Palindrome {
+
+    static class Member {
+        String name;
+        boolean quarantaineux;
+        DateMidnight inscription;
+        DateMidnight activite;
+        Integer nbMessages;
+    }
+
+    public static void main(String[] args) throws Exception {
+        WebClient w = new WebClient();
+        List<Member> members = new ArrayList<Member>();
+        for (int i = 1; i <= 5344; i++) {
+            String url = "http://neogeofans.com/leforum/member.php?u=" + i;
+            System.err.println(url);
+            HtmlPage page = w.getPage(url);
+            String textContent = page.getBody().getTextContent();
+            if (textContent.contains("supprimé")) {
+                continue;
+            }
+            Member member = new Member();
+            member.name = ((HtmlDivision) page.getByXPath("//div[@class='bigusername']").get(0)).getTextContent().trim();
+            member.quarantaineux = textContent.contains("Quarantaineux");
+            member.inscription = inscription(((HtmlTableDataCell) page.getByXPath("//td[@class='panelsurround']").get(0)).getTextContent());
+            member.activite = derniereActivite(((HtmlTableDataCell) page.getByXPath("//td[@class='smallfont']").get(3)).getTextContent());
+            member.nbMessages = nbMessages(((HtmlFieldSet) page.getByXPath("//fieldset[@class='fieldset']").get(0)).getTextContent());
+            members.add(member);
+        }
+
+        Collections.sort(members, new Comparator<Member>() {
+            @Override
+            public int compare(Member member, Member member2) {
+                return member2.nbMessages.compareTo(member.nbMessages);
+            }
+        });
+
+        System.err.println(members.size() + " membres");
+        System.err.println("Les plus gros posteurs");
+        for (int i = 0; i < 20; i++) {
+            System.err.println(members.get(i).name + " : " + members.get(i).nbMessages + " msgs");
+        }
+
+        int nbQuarantaineux = 0;
+        int nbNewbies = 0;
+        int actifs = 0;
+        int muets = 0;
+        for (Member member : members) {
+            if (member.quarantaineux) nbQuarantaineux++;
+            if (member.inscription.isAfter(new DateMidnight().minusMonths(1))) nbNewbies++;
+            if (member.activite.isAfter(new DateMidnight().minusMonths(2))) actifs++;
+            if (member.nbMessages == 0) muets++;
+        }
+        System.err.println(nbQuarantaineux + " quarantaineux");
+        System.err.println(nbNewbies + " newbies");
+        System.err.println(actifs + " actifs");
+        System.err.println(muets + " muets");
+
+    }
+
+    private static int nbMessages(String textContent) {
+        String nbMessages = textContent.split(":")[1].trim().split(" ")[0].replaceAll(" ", "");
+        return Integer.parseInt(nbMessages);
+    }
+
+    private static DateMidnight derniereActivite(String textContent) throws ParseException {
+        String[] split = textContent.split(":");
+        if(split.length == 1) {
+            return new DateMidnight().minusYears(20);
+        }
+        String date = split[1].split("\n")[0];
+        if (date.contains("Aujourd")) {
+            return new DateMidnight();
+        }
+        if (date.contains("Hier")) {
+            return DateMidnight.now().minusDays(1);
+        }
+        return toDate(date);
+    }
+
+    private static DateMidnight inscription(String textContent) throws ParseException {
+        String date = textContent.split(":")[1].split("\n")[0];
+        return toDate(date);
+    }
+
+    private static DateMidnight toDate(String strDate) throws ParseException {
+        return new DateMidnight(new SimpleDateFormat("dd/MM/yyyy").parse(strDate));
+    }
+
+}
